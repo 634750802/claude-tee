@@ -8,8 +8,8 @@ import { TextDecoderStream } from 'node:stream/web';
 import { createClient } from 'redis';
 
 const command = program
-  .requiredOption('--redis-url <string>', 'Redis URL.')
-  .requiredOption('--redis-stream-prefix <string>', 'Redis stream prefix.')
+  .requiredOption('--target-url <string>', 'Redis URL.')
+  .requiredOption('--stream-id <string>', 'Redis stream prefix.')
   .requiredOption('-p,--print', 'Required. See claude --help.')
   .requiredOption('--output-format <format>', 'Must be "stream-json". See claude --help.', value => {
     if (value !== 'stream-json') {
@@ -23,12 +23,12 @@ const command = program
     const { operands, unknown } = this.parseOptions(process.argv.slice(2));
 
     const {
-      redisUrl,
-      redisStreamPrefix,
+      targetUrl,
+      streamId,
     } = options;
 
     const redis = createClient({
-      url: options.redisUrl,
+      url: targetUrl,
     });
 
     await redis.connect();
@@ -57,14 +57,14 @@ const command = program
               result = message;
             }
 
-            await redis.rPush(`${redisStreamPrefix}:list`, chunk);
-            await redis.publish(`${redisStreamPrefix}:channel`, JSON.stringify({ type: 'delta', index: index.toString() }));
+            await redis.rPush(`${streamId}:list`, chunk);
+            await redis.publish(`${streamId}:channel`, JSON.stringify({ type: 'delta', index: index.toString() }));
           },
           async close () {
-            await redis.publish(`${redisStreamPrefix}:signal`, JSON.stringify({ type: 'done' }));
+            await redis.publish(`${streamId}:signal`, JSON.stringify({ type: 'done' }));
           },
           async abort () {
-            await redis.publish(`${redisStreamPrefix}:signal`, JSON.stringify({ type: 'cancel' }));
+            await redis.publish(`${streamId}:signal`, JSON.stringify({ type: 'cancel' }));
           },
         })),
     );

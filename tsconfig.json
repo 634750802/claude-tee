@@ -8,6 +8,9 @@
     "strict": true,
     "verbatimModuleSyntax": true,
     "allowSyntheticDefaultImports": true,
-    "allowImportingTsExtensions": true
-  }
+    "skipLibCheck": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src"]
 }

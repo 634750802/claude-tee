@@ -1,6 +1,6 @@
 {
-  "name": "claude-code-proxy",
-  "version": "1.0.0",
+  "name": "claude-tee",
+  "version": "0.0.3",
   "description": "",
   "main": "dist/index.js",
   "type": "module",
@@ -12,10 +12,18 @@
     "redis": "^5.8.2"
   },
   "bin": {
-    "claude-code-proxy": "src/index.ts"
+    "claude-tee": "./dist/index.js"
+  },
+  "files": [
+    "readme.md",
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
   },
   "devDependencies": {
     "@anthropic-ai/claude-code": "^1.0.100",
-    "@types/node": "^22.18.0"
+    "@types/node": "^22.18.0",
+    "typescript": "^5.9.2"
   }
 }
