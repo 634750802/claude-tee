@@ -1,0 +1,21 @@
+{
+  "name": "claude-code-proxy",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "commander": "^14.0.0",
+    "redis": "^5.8.2"
+  },
+  "bin": {
+    "claude-code-proxy": "src/index.ts"
+  },
+  "devDependencies": {
+    "@anthropic-ai/claude-code": "^1.0.100",
+    "@types/node": "^22.18.0"
+  }
+}
