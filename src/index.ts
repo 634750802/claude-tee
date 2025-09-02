@@ -4,6 +4,7 @@ import type { SDKMessage, SDKResultMessage } from '@anthropic-ai/claude-code';
 import { InvalidArgumentError, program } from 'commander';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
+import { TextDecoderStream } from 'node:stream/web';
 import { createClient } from 'redis';
 
 const command = program
@@ -36,9 +37,6 @@ const command = program
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
-    const stdoutDecoder = new TextDecoder();
-    const stderrDecoder = new TextDecoder();
-
     let i = 0;
 
     const promises: Promise<void>[] = [];
@@ -46,35 +44,39 @@ const command = program
     let result: SDKResultMessage | undefined;
 
     promises.push(
-      Readable.toWeb(cp.stdout).pipeThrough(new TextDecoderStream()).pipeTo(new WritableStream<string>({
-        async write (chunk) {
-          const index = i;
-          i++;
+      Readable.toWeb(cp.stdout)
+        .pipeThrough(new TextDecoderStream())
+        .pipeTo(new WritableStream<string>({
+          async write (chunk) {
+            const index = i;
+            i++;
 
-          const message: SDKMessage = JSON.parse(chunk);
+            const message: SDKMessage = JSON.parse(chunk);
 
-          if (message.type === 'result') {
-            result = message;
-          }
+            if (message.type === 'result') {
+              result = message;
+            }
 
-          await redis.rPush(`${redisStreamPrefix}:list`, chunk);
-          await redis.publish(`${redisStreamPrefix}:channel`, JSON.stringify({ type: 'delta', index: i.toString() }));
-        },
-        async close () {
-          await redis.publish(`${redisStreamPrefix}:signal`, JSON.stringify({ type: 'done' }));
-        },
-        async abort () {
-          await redis.publish(`${redisStreamPrefix}:signal`, JSON.stringify({ type: 'cancel' }));
-        },
-      })),
+            await redis.rPush(`${redisStreamPrefix}:list`, chunk);
+            await redis.publish(`${redisStreamPrefix}:channel`, JSON.stringify({ type: 'delta', index: index.toString() }));
+          },
+          async close () {
+            await redis.publish(`${redisStreamPrefix}:signal`, JSON.stringify({ type: 'done' }));
+          },
+          async abort () {
+            await redis.publish(`${redisStreamPrefix}:signal`, JSON.stringify({ type: 'cancel' }));
+          },
+        })),
     );
 
     promises.push(
-      Readable.toWeb(cp.stderr).pipeThrough(new TextDecoderStream()).pipeTo(new WritableStream<string>({
-        async write (chunk) {
-          process.stderr.write(chunk);
-        },
-      })),
+      Readable.toWeb(cp.stderr)
+        .pipeThrough(new TextDecoderStream())
+        .pipeTo(new WritableStream<string>({
+          async write (chunk) {
+            process.stderr.write(chunk);
+          },
+        })),
     );
 
     cp.on('exit', async (code, signal) => {
