@@ -1,6 +1,6 @@
 {
   "name": "claude-tee",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "",
   "main": "dist/index.js",
   "type": "module",
@@ -8,8 +8,7 @@
     "build": "tsc"
   },
   "dependencies": {
-    "commander": "^14.0.0",
-    "redis": "^5.8.2"
+    "commander": "^14.0.0"
   },
   "bin": {
     "claude-tee": "./dist/index.js"

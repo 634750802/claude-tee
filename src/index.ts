@@ -5,11 +5,10 @@ import { InvalidArgumentError, program } from 'commander';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { TextDecoderStream } from 'node:stream/web';
-import { createClient } from 'redis';
 
 const command = program
-  .requiredOption('--target-url <string>', 'Redis URL.')
-  .requiredOption('--stream-id <string>', 'Redis stream prefix.')
+  .requiredOption('--target-url <string>', 'ai stream proxy server url e.g. http://localhost:8888.')
+  .requiredOption('--stream-id <string>', 'stream id for this claude execution.')
   .requiredOption('-p,--print', 'Required. See claude --help.')
   .requiredOption('--output-format <format>', 'Must be "stream-json". See claude --help.', value => {
     if (value !== 'stream-json') {
@@ -27,47 +26,50 @@ const command = program
       streamId,
     } = options;
 
-    const redis = createClient({
-      url: targetUrl,
-    });
-
-    await redis.connect();
-
     const cp = spawn('claude', ['-p', '--output-format', 'stream-json', '--verbose', ...unknown, ...operands], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-
-    let i = 0;
 
     const promises: Promise<void>[] = [];
 
     let result: SDKResultMessage | undefined;
 
-    promises.push(
-      Readable.toWeb(cp.stdout)
+    console.log(targetUrl);
+
+    promises.push(fetch(targetUrl + `/v1/streams/${encodeURIComponent(streamId)}`, {
+      method: 'POST',
+      duplex: 'half',
+      body: Readable.toWeb(cp.stdout)
         .pipeThrough(new TextDecoderStream())
-        .pipeTo(new WritableStream<string>({
-          async write (chunk) {
-            const index = i;
-            i++;
+        .pipeThrough(new TransformStream<string, string>({
+          transform (chunk, controller) {
+            chunk.split('\n').forEach(line => {
+              line = line.trim();
 
-            const message: SDKMessage = JSON.parse(chunk);
+              if (line) {
+                const message: SDKMessage = JSON.parse(line);
 
-            if (message.type === 'result') {
-              result = message;
-            }
+                if (message.type === 'result') {
+                  result = message;
+                }
 
-            await redis.rPush(`${streamId}:list`, chunk);
-            await redis.publish(`${streamId}:channel`, JSON.stringify({ type: 'delta', index: index.toString() }));
+                controller.enqueue(line);
+              }
+            });
           },
-          async close () {
-            await redis.publish(`${streamId}:signal`, JSON.stringify({ type: 'done' }));
-          },
-          async abort () {
-            await redis.publish(`${streamId}:signal`, JSON.stringify({ type: 'cancel' }));
-          },
-        })),
-    );
+        }))
+        .pipeThrough(new TextEncoderStream()),
+    }).then((res) => {
+      if (!res.ok) {
+        res.text()
+          .then(text => {
+            console.error('[ai-stream-proxy]', res.status, text);
+          })
+          .catch(() => {
+            console.error('[ai-stream-proxy]', res.status, res.statusText);
+          });
+      }
+    }, (err) => console.error(err)));
 
     promises.push(
       Readable.toWeb(cp.stderr)
@@ -81,9 +83,10 @@ const command = program
 
     cp.on('exit', async (code, signal) => {
       if (code != null) {
-        await Promise.all(promises);
-        await redis.close();
-        let reason: string;
+        await Promise.all(promises).catch(e => {
+          console.error(e);
+          return Promise.reject(e);
+        });
         if (result) {
           if (result.subtype === 'success') {
             if (result.is_error) {

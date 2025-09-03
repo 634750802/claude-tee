@@ -1,10 +1,10 @@
 ## Usage
 
 ```shell
- claude-tee \ 
-    --target-url redis://localhost:6379/1 \ 
-    --stream-id "abc-some-other-id" \ 
+claude-tee \                                                                                                                  
+    --target-url "http://127.0.0.1:3000" \
+    --stream-id "my-magic-stream-id" \
     -p --verbose \
-    --output-format stream-json --verbose \ 
+    --output-format stream-json --verbose \
     "Hi"
 ```
