@@ -7,8 +7,9 @@ import { Readable } from 'node:stream';
 import { TextDecoderStream } from 'node:stream/web';
 
 const command = program
-  .requiredOption('--target-url <string>', 'ai stream proxy server url e.g. http://localhost:8888.')
+  .requiredOption('--stream-server-url <string>', 'ai stream proxy server url e.g. http://localhost:8888.')
   .requiredOption('--stream-id <string>', 'stream id for this claude execution.')
+  .option('--stream-server-token <string>', 'auth token')
   .requiredOption('-p,--print', 'Required. See claude --help.')
   .requiredOption('--output-format <format>', 'Must be "stream-json". See claude --help.', value => {
     if (value !== 'stream-json') {
@@ -22,11 +23,16 @@ const command = program
     const { operands, unknown } = this.parseOptions(process.argv.slice(2));
 
     const {
-      targetUrl,
+      streamServerUrl,
+      streamServerToken,
       streamId,
-    } = options;
+    } = options as {
+      streamServerUrl: string;
+      streamServerToken: string;
+      streamId: string;
+    };
 
-    const cp = spawn('claude', ['-p', '--output-format', 'stream-json', '--verbose', ...unknown, ...operands], {
+    const cp = spawn('claude', ['-p', '--output-format', 'stream-json', '--include-partial-messages', '--verbose', ...unknown, ...operands], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -34,10 +40,19 @@ const command = program
 
     let result: SDKResultMessage | undefined;
 
-    console.log(targetUrl);
+    const headers: Record<string, string> = {
+      'Content-Type': 'claude-code-stream-json+include-partial-messages',
+    };
 
-    promises.push(fetch(targetUrl + `/v1/streams/${encodeURIComponent(streamId)}`, {
+    if (streamServerToken) {
+      headers['Authorization'] = `Bearer ${streamServerToken}`;
+    }
+
+    promises.push(fetch(streamServerUrl + `/v1/streams/${encodeURIComponent(streamId)}`, {
       method: 'POST',
+      headers: streamServerToken ? {
+        'Authorization': `Bearer ${streamServerToken}`,
+      } : undefined,
       duplex: 'half',
       body: Readable.toWeb(cp.stdout)
         .pipeThrough(new TextDecoderStream())
@@ -47,13 +62,16 @@ const command = program
               line = line.trim();
 
               if (line) {
-                const message: SDKMessage = JSON.parse(line);
+                try {
+                  const message: SDKMessage = JSON.parse(line);
 
-                if (message.type === 'result') {
-                  result = message;
+                  if (message.type === 'result') {
+                    result = message;
+                  }
+
+                  controller.enqueue(line + '\n');
+                } catch {
                 }
-
-                controller.enqueue(line);
               }
             });
           },
@@ -90,7 +108,9 @@ const command = program
         if (result) {
           if (result.subtype === 'success') {
             if (result.is_error) {
+              // Force exit with error
               console.error(result.result);
+              process.exit(code || -1);
             } else {
               console.log(result.result);
             }
