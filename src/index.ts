@@ -8,6 +8,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { TextDecoderStream } from 'node:stream/web';
 import { fileURLToPath } from 'node:url';
+import { inspect } from 'node:util';
 import { Agent, fetch } from 'undici';
 
 const agent = new Agent({
@@ -93,14 +94,19 @@ const command = program
       if (!res.ok) {
         res.text()
           .then(text => {
-            console.error('[ai-stream-proxy]', res.status, text);
+            process.stderr.write(`[ai-stream-proxy] ${res.status} ${text}\n`);
           })
           .catch(() => {
-            console.error('[ai-stream-proxy]', res.status, res.statusText);
+            process.stderr.write(`[ai-stream-proxy] ${res.status} ${res.statusText}\n`);
+          })
+          .finally(() => {
+            process.exit(1);
           });
-        process.exit(1);
       }
-    }, (err) => console.error(err)));
+    }, (err) => {
+      process.stderr.write(`[ai-stream-proxy] ${inspect(err)}\n`);
+      process.exit(1);
+    }));
 
     promises.push(
       Readable.toWeb(cp.stderr)
@@ -115,20 +121,20 @@ const command = program
     cp.on('exit', async (code, signal) => {
       if (code != null) {
         await Promise.all(promises).catch(e => {
-          console.error(e);
+          process.stderr.write(inspect(e) + '\n');
           return Promise.reject(e);
         });
         if (result) {
           if (result.subtype === 'success') {
             if (result.is_error) {
               // Force exit with error
-              console.error(result.result);
+              process.stderr.write(result.result + '\n');
               process.exit(code || -1);
             } else {
-              console.log(result.result);
+              process.stdout.write(result.result + '\n');
             }
           } else {
-            console.error(result.subtype);
+            process.stderr.write(result.subtype + '\n');
           }
         }
         process.exit(code);
