@@ -1,12 +1,19 @@
 #!/usr/bin/env node
 
 import type { SDKMessage, SDKResultMessage } from '@anthropic-ai/claude-code';
-import { InvalidArgumentError, program } from 'commander';
+import { InvalidArgumentError, Option, program } from 'commander';
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import { Readable } from 'node:stream';
 import { TextDecoderStream } from 'node:stream/web';
+import { fileURLToPath } from 'node:url';
+
+const packageJsonDir = path.resolve(fileURLToPath(import.meta.url), '../../package.json');
+const VERSION = JSON.parse(fs.readFileSync(packageJsonDir, 'utf-8')).version;
 
 const command = program
+  .version(VERSION)
   .requiredOption('--stream-server-url <string>', 'ai stream proxy server url e.g. http://localhost:8888.')
   .requiredOption('--stream-id <string>', 'stream id for this claude execution.')
   .option('--stream-server-token <string>', 'auth token')
@@ -17,6 +24,7 @@ const command = program
     }
   })
   .requiredOption('--verbose', 'Required. See claude --help.')
+  .requiredOption('--include-partial-messages', 'Required. See claude --help.')
   .allowUnknownOption()
   .allowExcessArguments()
   .action(async function (options) {
@@ -50,9 +58,7 @@ const command = program
 
     promises.push(fetch(streamServerUrl + `/v1/streams/${encodeURIComponent(streamId)}`, {
       method: 'POST',
-      headers: streamServerToken ? {
-        'Authorization': `Bearer ${streamServerToken}`,
-      } : undefined,
+      headers,
       duplex: 'half',
       body: Readable.toWeb(cp.stdout)
         .pipeThrough(new TextDecoderStream())
@@ -86,6 +92,7 @@ const command = program
           .catch(() => {
             console.error('[ai-stream-proxy]', res.status, res.statusText);
           });
+        process.exit(1);
       }
     }, (err) => console.error(err)));
 
