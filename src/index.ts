@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 
 import type { SDKMessage, SDKResultMessage } from '@anthropic-ai/claude-code';
-import { InvalidArgumentError, Option, program } from 'commander';
+import { InvalidArgumentError, program } from 'commander';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { TextDecoderStream } from 'node:stream/web';
 import { fileURLToPath } from 'node:url';
+import { Agent, fetch } from 'undici';
+
+const agent = new Agent({
+  bodyTimeout: 0,
+});
 
 const packageJsonDir = path.resolve(fileURLToPath(import.meta.url), '../../package.json');
 const VERSION = JSON.parse(fs.readFileSync(packageJsonDir, 'utf-8')).version;
@@ -57,6 +62,7 @@ const command = program
     }
 
     promises.push(fetch(streamServerUrl + `/v1/streams/${encodeURIComponent(streamId)}`, {
+      dispatcher: agent,
       method: 'POST',
       headers,
       duplex: 'half',
