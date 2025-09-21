@@ -80,7 +80,7 @@ const command = program
     });
 
     cp.on('spawn', () => {
-      process.stdout.write(`[claude-tee ${Date.now()}  INFO]: spawned claude code ${cp.pid}\n`);
+      process.stderr.write(`[claude-tee ${Date.now()}  INFO]: spawned claude code ${cp.pid}\n`);
     });
 
     cp.stdout
@@ -115,7 +115,7 @@ const command = program
         process.exit(1);
       })
       .on('close', async (code, signal) => {
-        process.stdout.write(`[claude-tee ${Date.now()}  INFO]: claude code exit with code ${code}\n`);
+        process.stderr.write(`[claude-tee ${Date.now()}  INFO]: claude code exit with code ${code}\n`);
         if (code != null) {
           if (result) {
             if (result.subtype === 'success') {
