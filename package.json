@@ -8,8 +8,7 @@
     "build": "tsc"
   },
   "dependencies": {
-    "commander": "^14.0.0",
-    "undici": "^7.16.0"
+    "commander": "^14.0.0"
   },
   "bin": {
     "claude-tee": "./dist/index.js"

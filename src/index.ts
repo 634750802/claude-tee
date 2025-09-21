@@ -1,19 +1,13 @@
 #!/usr/bin/env node
 
-import type { SDKMessage, SDKResultMessage } from '@anthropic-ai/claude-code';
+import type { SDKResultMessage } from '@anthropic-ai/claude-code';
 import { InvalidArgumentError, program } from 'commander';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
-import { Readable } from 'node:stream';
-import { TextDecoderStream } from 'node:stream/web';
 import { fileURLToPath } from 'node:url';
 import { inspect } from 'node:util';
-import { Agent, fetch } from 'undici';
-
-const agent = new Agent({
-  bodyTimeout: 0,
-});
 
 const packageJsonDir = path.resolve(fileURLToPath(import.meta.url), '../../package.json');
 const VERSION = JSON.parse(fs.readFileSync(packageJsonDir, 'utf-8')).version;
@@ -50,8 +44,6 @@ const command = program
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
-    const promises: Promise<void>[] = [];
-
     let result: SDKResultMessage | undefined;
 
     const headers: Record<string, string> = {
@@ -62,87 +54,74 @@ const command = program
       headers['Authorization'] = `Bearer ${streamServerToken}`;
     }
 
-    promises.push(fetch(streamServerUrl + `/v1/streams/${encodeURIComponent(streamId)}`, {
-      dispatcher: agent,
+    const request = http.request(`${streamServerUrl}/v1/streams/${encodeURIComponent(streamId)}`, {
       method: 'POST',
       headers,
-      duplex: 'half',
-      body: Readable.toWeb(cp.stdout)
-        .pipeThrough(new TextDecoderStream())
-        .pipeThrough(new TransformStream<string, string>({
-          transform (chunk, controller) {
-            chunk.split('\n').forEach(line => {
-              line = line.trim();
+      timeout: 0,
+    });
 
-              if (line) {
-                try {
-                  const message: SDKMessage = JSON.parse(line);
+    request.on('error', (err) => {
+      process.stderr.write(`[claude-tee]: failed to send stream to server: ${inspect(err)}\n`);
+    });
 
-                  if (message.type === 'result') {
-                    result = message;
-                  }
-
-                  controller.enqueue(line + '\n');
-                } catch {
-                }
-              }
-            });
-          },
-        }))
-        .pipeThrough(new TextEncoderStream()),
-    }).then((res) => {
-      if (!res.ok) {
-        res.text()
-          .then(text => {
-            process.stderr.write(`[ai-stream-proxy] ${res.status} ${text}\n`);
+    request.on('response', response => {
+      if (response.statusCode !== 200) {
+        process.stderr.write(`[claude-tee]: failed to send stream to server\n`);
+        process.stderr.write(`[claude-tee][resp]: ${response.statusCode} ${response.statusMessage}\n`);
+        response
+          .map((dat: Buffer) => {
+            return '[claude-tee][resp]: ' + dat.toString('utf-8') + '\n';
           })
-          .catch(() => {
-            process.stderr.write(`[ai-stream-proxy] ${res.status} ${res.statusText}\n`);
-          })
-          .finally(() => {
-            process.exit(1);
-          });
-      }
-    }, (err) => {
-      process.stderr.write(`[ai-stream-proxy] ${inspect(err)}\n`);
-      process.exit(1);
-    }));
-
-    promises.push(
-      Readable.toWeb(cp.stderr)
-        .pipeThrough(new TextDecoderStream())
-        .pipeTo(new WritableStream<string>({
-          async write (chunk) {
-            process.stderr.write(chunk);
-          },
-        })),
-    );
-
-    cp.on('exit', async (code, signal) => {
-      if (code != null) {
-        await Promise.all(promises).catch(e => {
-          process.stderr.write(inspect(e) + '\n');
-          return Promise.reject(e);
-        });
-        if (result) {
-          if (result.subtype === 'success') {
-            if (result.is_error) {
-              // Force exit with error
-              process.stderr.write(result.result + '\n');
-              process.exit(code || -1);
-            } else {
-              process.stdout.write(result.result + '\n');
-            }
-          } else {
-            process.stderr.write(result.subtype + '\n');
-          }
-        }
-        process.exit(code);
-      } else {
-        process.stderr.write(`${signal}\n`);
-        process.exit(-1);
+          .pipe(process.stderr, { end: false });
       }
     });
+
+    cp.stdout.on('data', (data: Buffer) => {
+      try {
+        const chunk = JSON.parse(data.toString('utf-8'));
+        if (chunk.type === 'result') {
+          result = chunk;
+        }
+      } catch {
+      }
+    });
+
+    cp.stdout.pipe(request, { end: false });
+    cp.stderr.pipe(process.stderr, { end: false });
+
+    cp
+      .on('error', (err) => {
+        request.destroy(err);
+        process.stderr.write(`failed to spawn claude code: ${inspect(err)}\n`);
+        process.exitCode = 1;
+      })
+      .on('close', async (code, signal) => {
+        request.end();
+
+        if (code != null) {
+          if (result) {
+            if (result.subtype === 'success') {
+              if (result.is_error) {
+                // Force exit with error
+                process.stderr.write(result.result + '\n');
+                process.exitCode = code;
+              } else {
+                process.stdout.write(result.result + '\n');
+                process.exitCode = code;
+              }
+            } else {
+              process.stderr.write(result.subtype + '\n');
+              process.exitCode = code;
+            }
+          } else {
+            process.stderr.write('claude code no result.\n');
+            process.exitCode = code;
+          }
+        } else {
+          process.stderr.write(`${signal}\n`);
+          process.exitCode = -1;
+        }
+      });
   });
 
 command.parse();
