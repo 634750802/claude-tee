@@ -2,7 +2,7 @@
 
 import type { SDKResultMessage } from '@anthropic-ai/claude-code';
 import { InvalidArgumentError, program } from 'commander';
-import { spawn } from 'node:child_process';
+import { type ChildProcess, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
@@ -45,7 +45,9 @@ const command = program
     });
 
     process.stderr.write(`[claude-tee ${Date.now()}  INFO]: ${VERSION}\n`);
-    cp.stderr.pipe(process.stderr, { end: false });
+    cp.stderr.on('close', () => {
+      process.stderr.write(`[claude-tee ${Date.now()}  INFO]: claude stderr close\n`);
+    }).pipe(process.stderr, { end: false });
 
     let result: SDKResultMessage | undefined;
 
@@ -76,11 +78,16 @@ const command = program
             return `[claude-tee ${Date.now()} ERROR][resp]: ` + dat.toString('utf-8') + '\n';
           })
           .pipe(process.stderr, { end: false });
+
+        request.destroy();
+      } else {
+        response.on('data', () => {});
       }
     });
 
     cp.on('spawn', () => {
       process.stderr.write(`[claude-tee ${Date.now()}  INFO]: spawned claude code ${cp.pid}\n`);
+      request.write('\x00\x00claude code spawned\x00\x00\n');
     });
 
     cp.stdout
@@ -104,18 +111,19 @@ const command = program
           }
         });
       })
-      .on('end', () => {
+      .on('close', () => {
         request.end();
+        process.stderr.write(`[claude-tee ${Date.now()}  INFO]: claude stdout close\n`);
       });
 
     cp
       .on('error', (err) => {
         request.destroy(err);
-        process.stderr.write(`failed to spawn claude code: ${inspect(err)}\n`);
+        process.stderr.write(`[claude-tee ${Date.now()} ERROR]: failed to spawn claude code: ${inspect(err)}\n`);
         process.exit(1);
       })
       .on('close', async (code, signal) => {
-        process.stderr.write(`[claude-tee ${Date.now()}  INFO]: claude code exit with code ${code}\n`);
+        process.stderr.write(`[claude-tee ${Date.now()}  INFO]: claude code close with code ${code}\n`);
         if (code != null) {
           if (result) {
             if (result.subtype === 'success') {
@@ -136,10 +144,44 @@ const command = program
           process.stderr.write(`${signal}\n`);
           process.exitCode = -1;
         }
-        process.stdout.end();
-        process.stderr.end();
+        clearInterval(heartbeatInterval);
+        scheduleExit(cp);
+
+        if (request.destroyed) {
+          process.stderr.write(`[claude-tee ${Date.now()}  INFO]: stream already closed, exit\n`);
+          process.exit();
+        } else {
+          process.stderr.write(`[claude-tee ${Date.now()}  INFO]: wait for request stream ending\n`);
+          request.on('close', () => {
+            process.stderr.write(`[claude-tee ${Date.now()}  INFO]: stream closed, exit\n`);
+            process.exit();
+          });
+        }
+
         request.destroy();
       });
+
+    let exitAttempts = 0;
+
+    const heartbeatInterval = setInterval(() => {
+      try {
+        if (request.writable) {
+          request.write('\x00\x00heartbeat\x00\x00\n');
+        }
+      } catch {
+      }
+      if (cp.exitCode != null && request.closed) {
+        process.stderr.write(`[claude-tee ${Date.now()}  INFO]: force exit (claude exited ${cp.exitCode}, stream ended)\n`);
+        process.exit(cp.exitCode);
+      }
+    }, 5000);
   });
+
+function scheduleExit (cp: ChildProcess) {
+  setTimeout(() => {
+    process.stderr.write(`[claude-tee ${Date.now()}  INFO]: force exit (30s timeout)\n`);
+    process.exit(cp.exitCode);
+  }, 30000);
+}
 
 command.parse();
