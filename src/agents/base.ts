@@ -40,6 +40,8 @@ export abstract class BaseAgent {
         client.stop(true, `stdout error: ${err.message}`);
       });
 
+    child_process.stderr.pipe(process.stderr, { end: false });
+
     child_process
       .on('error', async (err) => {
         process.stderr.write(`[code-tee ${Date.now()} ERROR]: failed to spawn claude code: ${inspect(err)}\n`);

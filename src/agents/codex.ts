@@ -35,7 +35,7 @@ export class Codex extends BaseAgent {
       if (this.final_turn_failed) {
         process.stderr.write(this.final_turn_failed.error.message + '\n');
       } else {
-        process.stderr.write(`codex exit (${code}) with no error message.\n`);
+        process.stderr.write(`codex exit (${code}) with no error result.\n`);
       }
     }
   }
