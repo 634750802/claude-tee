@@ -19,7 +19,7 @@
     "dist"
   ],
   "engines": {
-    "node": ">=22.18.0"
+    "node": ">=22.14.0"
   },
   "devDependencies": {
     "@anthropic-ai/claude-code": "^1.0.100",
