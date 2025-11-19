@@ -129,35 +129,37 @@ export class StreamClient {
   }
 
   stop (abort: boolean, reason: string) {
-    if (this.failed) {
-      return;
-    }
+    this.init.then(() => {
+      if (this.failed) {
+        return;
+      }
 
-    process.stderr.write(`[code-tee ${Date.now()}  INFO]: ${abort ? 'abort' : 'stop'} stream ${this.cursor}: ${reason}\n`);
-    this.cancelHeartbeat();
-    this.finalPending.push(() => retryIfFailed(`end stream`, async () => {
-      await fetch(`${this.streamServerUrl}/v2/streams/${encodeURIComponent(this.streamId)}/actions/stop`, {
-        method: 'POST',
-        headers: {
-          ...this.headers,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          stop_state: abort ? 'abort' : 'done',
-          stop_reason: reason,
-          final_size: this.cursor,
-        }),
-        dispatcher: this.agent,
-        keepalive: true,
-      }).then(handleResponse('stop stream'));
-    }));
+      process.stderr.write(`[code-tee ${Date.now()}  INFO]: ${abort ? 'abort' : 'stop'} stream ${this.cursor}: ${reason}\n`);
+      this.cancelHeartbeat();
+      this.finalPending.push(() => retryIfFailed(`end stream`, async () => {
+        await fetch(`${this.streamServerUrl}/v2/streams/${encodeURIComponent(this.streamId)}/actions/stop`, {
+          method: 'POST',
+          headers: {
+            ...this.headers,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            stop_state: abort ? 'abort' : 'done',
+            stop_reason: reason,
+            final_size: this.cursor,
+          }),
+          dispatcher: this.agent,
+          keepalive: true,
+        }).then(handleResponse('stop stream'));
+      }));
+    });
   }
 }
 
 function handleResponse (action: string) {
-  return (res: Response) => {
+  return async (res: Response) => {
     if (!res.ok) {
-      throw new Error(`failed to ${action}: ${res.status}`);
+      throw new Error(`failed to ${action}: ${res.status} ${await res.text().catch(() => res.statusText)}`);
     }
   };
 }
