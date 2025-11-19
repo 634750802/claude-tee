@@ -1,6 +1,6 @@
 {
-  "name": "claude-tee",
-  "version": "1.2.0",
+  "name": "code-tee",
+  "version": "1.0.0",
   "description": "",
   "main": "dist/index.js",
   "type": "module",
@@ -12,7 +12,7 @@
     "undici": "^7.16.0"
   },
   "bin": {
-    "claude-tee": "./dist/index.js"
+    "code-tee": "./dist/index.js"
   },
   "files": [
     "readme.md",
@@ -23,6 +23,8 @@
   },
   "devDependencies": {
     "@anthropic-ai/claude-code": "^1.0.100",
+    "@openai/codex": "^0.53.0",
+    "@openai/codex-sdk": "^0.50.0",
     "@types/node": "^22.18.0",
     "typescript": "^5.9.2"
   }
