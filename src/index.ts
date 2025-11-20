@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import type { BaseAgent } from './agents/base.js';
 import { Claude } from './agents/claude.js';
 import { Codex } from './agents/codex.js';
+import { PantheonTdd } from './agents/pantheon-tdd.js';
 import { StreamClient } from './client.js';
 
 const packageJsonDir = path.resolve(fileURLToPath(import.meta.url), '../../package.json');
@@ -20,6 +21,7 @@ const command = program
   .option('--stream-message-id <string>', 'message id for this agent execution. Default to stream-id.')
   .option('--stream-protocol <string>', 'v2', 'v2')
   .option('--stream-server-token <string>', 'auth token')
+  .option('--exec-path <string>', 'path to agent executable. Default to standard agent name in PATH.')
   .allowUnknownOption()
   .allowExcessArguments()
   .action(async function (action, options) {
@@ -31,11 +33,13 @@ const command = program
       streamServerToken,
       streamId,
       streamMessageId,
+      execPath,
     } = options as {
       streamServerUrl: string;
       streamServerToken: string;
       streamId: string;
       streamMessageId?: string;
+      execPath?: string;
     };
 
     const [agent, ...restOperands] = operands;
@@ -52,12 +56,16 @@ const command = program
         a = new Codex([...unknown, ...restOperands]);
         contentType = 'codex-stream-json';
         break;
+      case 'pantheon-tdd':
+        a = new PantheonTdd([...unknown, ...restOperands]);
+        contentType = 'pantheon-tdd-stream-json';
+        break;
       default:
         process.stderr.write(`[code-tee ${Date.now()} ERROR]: invalid agent ${agent}\n`);
         process.exit(1);
     }
 
-    a.execute(new StreamClient(streamServerUrl, streamServerToken, streamId, streamMessageId, contentType));
+    a.execute(new StreamClient(streamServerUrl, streamServerToken, streamId, streamMessageId, contentType), { execPath });
   });
 
 command.parse();

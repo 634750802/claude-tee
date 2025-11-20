@@ -18,8 +18,8 @@ export abstract class BaseAgent {
 
   abstract handleClose (code: number): void
 
-  execute (client: StreamClient) {
-    const child_process = cp.spawn(this.exec, this.args, {
+  execute (client: StreamClient, { execPath }: { execPath?: string }) {
+    const child_process = cp.spawn(execPath ?? this.exec, this.args, {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
