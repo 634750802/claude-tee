@@ -25,7 +25,7 @@ export class PantheonTdd extends BaseAgent {
           process.stderr.write(this.final_item.summary);
           process.exitCode = 1;
         } else {
-          process.stdout.write(JSON.stringify(this.final_item.final_report) + '\n');
+          process.stdout.write(JSON.stringify(this.final_item.final_report, undefined, 2) + '\n');
         }
       } else {
         process.stdout.write('No final item.\n');
