@@ -49,7 +49,7 @@ export abstract class BaseAgent {
         process.exit(1);
       })
       .on('close', (code, signal) => {
-        process.stderr.write(`[code-tee ${Date.now()}  INFO]: claude code close with code ${code}\n`);
+        process.stderr.write(`[code-tee ${Date.now()}  INFO]: ${this.exec} close with code ${code}\n`);
         if (code != null) {
           this.handleClose(code);
           process.exitCode = code;
