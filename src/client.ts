@@ -1,8 +1,7 @@
+import { inspect } from 'node:util';
 import { Agent, Dispatcher, fetch, type Response } from 'undici';
-import { retryIfFailed } from '../utils/retry.js';
-import type { ClientType } from './types.js';
 
-export class AIStreamProxyClient implements ClientType {
+export class StreamClient {
   private buf: Buffer[] = [];
 
   private chunks: Promise<void>[] = [];
@@ -163,4 +162,24 @@ function handleResponse (action: string) {
       throw new Error(`failed to ${action}: ${res.status} ${await res.text().catch(() => res.statusText)}`);
     }
   };
+}
+
+async function retryIfFailed (action: string, cb: () => Promise<void>, times: number = 3) {
+  let attempt = 0;
+
+  for (let i = 0; i < times; i++) {
+    try {
+      await cb();
+      return;
+    } catch (e) {
+      attempt++;
+      if (attempt < times) {
+        process.stderr.write(`[code-tee ${Date.now()}  INFO]: failed to ${action}, retrying after 1 second... (${attempt}/${times}) ${inspect(e)}\n`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } else {
+        process.stderr.write(`[code-tee ${Date.now()}  INFO]: failed to ${action}, giving up. (${attempt}/${times})\n`);
+        throw e;
+      }
+    }
+  }
 }
