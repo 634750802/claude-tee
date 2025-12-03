@@ -1,6 +1,6 @@
 import cp from 'node:child_process';
 import { inspect } from 'node:util';
-import type { StreamClient } from '../client.js';
+import type { ClientType } from '../clients/types.js';
 
 export abstract class BaseAgent {
   private readonly exec: string;
@@ -18,7 +18,7 @@ export abstract class BaseAgent {
 
   abstract handleClose (code: number): void
 
-  execute (client: StreamClient, { execPath }: { execPath?: string }) {
+  execute (client: ClientType, { execPath }: { execPath?: string }) {
     const child_process = cp.spawn(execPath ?? this.exec, this.args, {
       stdio: ['ignore', 'pipe', 'pipe'],
     });

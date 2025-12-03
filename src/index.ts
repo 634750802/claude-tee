@@ -8,7 +8,10 @@ import type { BaseAgent } from './agents/base.js';
 import { Claude } from './agents/claude.js';
 import { Codex } from './agents/codex.js';
 import { PantheonTdd } from './agents/pantheon-tdd.js';
-import { StreamClient } from './client.js';
+import { AIStreamProxyClient } from './clients/ai-stream-proxy-client.js';
+import type { ClientType } from './clients/types.js';
+import { NoopClient } from './clients/noop-client.js';
+import { VercelQueueClient } from './clients/vercel-queue-client.js';
 
 const packageJsonDir = path.resolve(fileURLToPath(import.meta.url), '../../package.json');
 const VERSION = JSON.parse(fs.readFileSync(packageJsonDir, 'utf-8')).version;
@@ -16,7 +19,7 @@ const VERSION = JSON.parse(fs.readFileSync(packageJsonDir, 'utf-8')).version;
 const command = program
   .version(VERSION)
   .argument('<agent>', '`claude` or `codex`')
-  .requiredOption('--stream-server-url <string>', 'ai stream proxy server url e.g. http://localhost:8888.')
+  .requiredOption('--stream-server-url <string>', 'ai stream proxy server url e.g. http://localhost:8888. For vercel queues, use vercel-queue-beta:{topic-prefix}')
   .requiredOption('--stream-id <string>', 'stream id for this agent execution.')
   .option('--stream-message-id <string>', 'message id for this agent execution. Default to stream-id.')
   .option('--stream-protocol <string>', 'v2', 'v2')
@@ -65,7 +68,18 @@ const command = program
         process.exit(1);
     }
 
-    a.execute(new StreamClient(streamServerUrl, streamServerToken, streamId, streamMessageId, contentType), { execPath });
+    let client: ClientType;
+
+    if (/^https?:\/\//.test(streamServerUrl)) {
+      client = new AIStreamProxyClient(streamServerUrl, streamServerToken, streamId, streamMessageId, contentType);
+    } else if (streamServerUrl.startsWith('vercel-queue-beta:')) {
+      client = new VercelQueueClient(streamServerUrl, streamServerToken, streamId, streamMessageId, contentType)
+    } else {
+      process.stderr.write(`[code-tee ${Date.now()} ERROR]: invalid stream server url ${streamServerUrl}, stream will not be send to any server.\n`);
+      client = new NoopClient();
+    }
+
+    a.execute(client, { execPath });
   });
 
 command.parse();
