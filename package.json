@@ -1,6 +1,6 @@
 {
   "name": "code-tee",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "",
   "main": "dist/index.js",
   "type": "module",
@@ -22,7 +22,7 @@
     "node": ">=22.14.0"
   },
   "devDependencies": {
-    "@anthropic-ai/claude-code": "^1.0.100",
+    "@anthropic-ai/claude-code": "^1.0.128",
     "@openai/codex": "^0.60.1",
     "@openai/codex-sdk": "^0.60.1",
     "@types/node": "^22.18.0",

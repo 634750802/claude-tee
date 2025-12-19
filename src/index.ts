@@ -8,6 +8,7 @@ import type { BaseAgent } from './agents/base.js';
 import { Claude } from './agents/claude.js';
 import { Codex } from './agents/codex.js';
 import { PantheonTdd } from './agents/pantheon-tdd.js';
+import { PantheonAgent } from './agents/pantheon.js';
 import { StreamClient } from './client.js';
 
 const packageJsonDir = path.resolve(fileURLToPath(import.meta.url), '../../package.json');
@@ -59,7 +60,15 @@ const command = program
       case 'pantheon-tdd':
         a = new PantheonTdd([...unknown, ...restOperands]);
         contentType = 'pantheon-tdd-stream-json';
+        process.stderr.write(`[code-tee ${Date.now()}  WARN]: pantheon-tdd is deprecated, use code-tee pantheon dev\n`);
         break;
+      case 'pantheon': {
+        const [subAgent, ...otherOperands] = restOperands;
+        a = new PantheonAgent(PantheonAgent.determineSubAgent(subAgent), [...unknown, ...otherOperands]);
+        contentType = 'pantheon-agent-stream-json';
+        break;
+      }
+
       default:
         process.stderr.write(`[code-tee ${Date.now()} ERROR]: invalid agent ${agent}\n`);
         process.exit(1);
