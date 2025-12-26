@@ -1,3 +1,6 @@
+## 1.2.1
+- add `--suppress-logs` to omit non-error logs
+
 ## 1.2.0
 - support `pantheon` agent type
   - `code-tee pantheon dev ...`

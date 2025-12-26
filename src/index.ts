@@ -10,6 +10,7 @@ import { Codex } from './agents/codex.js';
 import { PantheonTdd } from './agents/pantheon-tdd.js';
 import { PantheonAgent } from './agents/pantheon.js';
 import { StreamClient } from './client.js';
+import { log, setSilent } from './log.js';
 
 const packageJsonDir = path.resolve(fileURLToPath(import.meta.url), '../../package.json');
 const VERSION = JSON.parse(fs.readFileSync(packageJsonDir, 'utf-8')).version;
@@ -23,10 +24,10 @@ const command = program
   .option('--stream-protocol <string>', 'v2', 'v2')
   .option('--stream-server-token <string>', 'auth token')
   .option('--exec-path <string>', 'path to agent executable. Default to standard agent name in PATH.')
+  .option('--suppress-logs', 'suppress all logs except for errors.', false)
   .allowUnknownOption()
   .allowExcessArguments()
   .action(async function (action, options) {
-    process.stderr.write(`[code-tee ${Date.now()}  INFO]: ${VERSION}\n`);
     const { operands, unknown } = this.parseOptions(process.argv.slice(2));
 
     const {
@@ -35,13 +36,20 @@ const command = program
       streamId,
       streamMessageId,
       execPath,
+      suppressLogs,
     } = options as {
       streamServerUrl: string;
       streamServerToken: string;
       streamId: string;
       streamMessageId?: string;
       execPath?: string;
+      suppressLogs: boolean;
     };
+
+    if (suppressLogs) {
+      setSilent(true);
+    }
+    log('INFO', VERSION);
 
     const [agent, ...restOperands] = operands;
 
@@ -60,7 +68,7 @@ const command = program
       case 'pantheon-tdd':
         a = new PantheonTdd([...unknown, ...restOperands]);
         contentType = 'pantheon-tdd-stream-json';
-        process.stderr.write(`[code-tee ${Date.now()}  WARN]: pantheon-tdd is deprecated, use code-tee pantheon dev\n`);
+        log('WARN', 'pantheon-tdd is deprecated, use code-tee pantheon dev');
         break;
       case 'pantheon': {
         const [subAgent, ...otherOperands] = restOperands;
@@ -70,7 +78,7 @@ const command = program
       }
 
       default:
-        process.stderr.write(`[code-tee ${Date.now()} ERROR]: invalid agent ${agent}\n`);
+        log('ERROR', `unknown agent ${agent}`);
         process.exit(1);
     }
 

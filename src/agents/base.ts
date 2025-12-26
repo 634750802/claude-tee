@@ -1,6 +1,7 @@
 import cp from 'node:child_process';
 import { inspect } from 'node:util';
 import type { StreamClient } from '../client.js';
+import { log } from '../log.js';
 
 export abstract class BaseAgent {
   private readonly exec: string;
@@ -44,17 +45,21 @@ export abstract class BaseAgent {
 
     child_process
       .on('error', async (err) => {
-        process.stderr.write(`[code-tee ${Date.now()} ERROR]: failed to spawn claude code: ${inspect(err)}\n`);
+        log('ERROR', `failed to spawn claude code: ${inspect(err)}`)
         client.stop(true, `spawn error: ${err.message}`);
         process.exit(1);
       })
       .on('close', (code, signal) => {
-        process.stderr.write(`[code-tee ${Date.now()}  INFO]: ${this.exec} close with code ${code}\n`);
         if (code != null) {
           this.handleClose(code);
+          if (code === 0) {
+            log('INFO', `${this.exec} close with code ${code}`)
+          } else {
+            log('ERROR', `${this.exec} close with code ${code}`)
+          }
           process.exitCode = code;
         } else {
-          process.stderr.write(`${signal}\n`);
+          log('ERROR', `${this.exec} close with signal: ${signal}`)
           process.exitCode = -1;
         }
         client.wait()
